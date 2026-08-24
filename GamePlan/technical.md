@@ -10,19 +10,29 @@
 
 ## 1. Server Architecture & Capacities
 
-The game utilizes a hybrid networking model, scaling from peer-to-peer private lobbies to massive dedicated public servers.
+The game utilizes a hybrid networking model, scaling from peer-to-peer player lobbies to massive official dedicated servers.
 
-### 1.1 Private Servers (Player Hosted)
-* **Free Tier:** Max **8 players**. Ideal for small friend groups. Can be hosted via P2P Listen Server on almost any hardware.
-* **Paid Tier:** Max **24 players**. Requires a decent gaming PC and stable upload speed (10+ Mbps recommended). Hosted via P2P Listen Server.
+### 1.1 Player-Hosted Lobbies/Servers
+* **Free Tier:** Max **8 players**. Ideal for small friend groups. Hosted via P2P Listen Server.
+* **Paid Tier:** Max **24 players**. Requires a decent gaming PC and stable upload speed. Hosted via P2P Listen Server.
+* **Visibility Toggle:** When creating a lobby, the host can choose its visibility:
+  * **Private:** Invite-only. Does not appear in the server browser.
+  * **Public:** Listed in the global server browser for anyone to join. *(Note: Making a lobby public does NOT increase the player cap; it remains strictly limited to 8 or 24 players).*
 * **Topology:** Listen Server (P2P).
-* **NAT Traversal:** Handled automatically by GNS (GameNetworkingSockets).
+* **NAT Traversal:** Handled automatically by GNS (UDP Hole Punching / Relay).
 
-### 1.2 Public Servers (Cloud Dedicated)
+### 1.2 Official Servers (Cloud Dedicated)
 * **Max Capacity:** **200 players** per single server instance.
-* **World Partitioning:** The 200 players are distributed across multiple **Arenas/Worlds** within the same server instance (e.g., 4 arenas of 50 players, or 2 arenas of 100, depends on gamemode honestly).
-* **Topology:** Headless Unity Dedicated Server.
+* **World Partitioning:** The 200 players are distributed across multiple **Arenas/Worlds** within the same server instance (e.g., 4 arenas of 50 players, or 2 arenas of 100).
+* **Topology:** Headless Unity Dedicated Server hosted on cloud infrastructure.
 * **Performance Mandate:** Requires **Unity DOTS (ECS + Burst Compiler)** for entity management and spatial hashing to maintain 30 TPS with 200 concurrent connections.
+
+### 1.3 Single Player (Localhost)
+* **Topology:** Localhost (Client and Server run on the same machine).
+* **World Type:** Open Flat Creative (Superflat generation preset). Infinite or large bounded plane optimized for building.
+* **Performance:** Bypasses all network serialization and GNS overhead. The 30 TPS tick rate executes instantly via local memory pointers, resulting in zero input lag and maximum frame rates.
+* **Persistence:** World data saves locally to the user's file system (e.g., local JSON or SQLite database). The Central Master Server is not pinged for world state or chunk updates.
+* **Anti-Cheat:** Completely disabled.
 
 ---
 
