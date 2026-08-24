@@ -15,8 +15,8 @@
 | **Move Backward** | `S` | Standard movement. |
 | **Move Right** | `D` | Standard movement. |
 | **Jump** | `Space` | Standard vertical jump. |
-| **Crouch / Walk** | `Shift` | Reduces movement speed and player hitbox height. |
-| **Flash-Step** | `Ctrl` | **Special Movement:** Performs a quick, large step (2x normal step distance) in the current movement direction.<br>• **Cost:** Instantly reduces Stamina by 1.5.<br>• **Restriction 1:** Cannot attack until the step is fully landed.<br>• **Restriction 2:** Cannot be used under **ANY** debuff.<br>• **Note:** This is a quick repositioning tool, not a super-speed dash. |
+| **Crouch / Walk** | `Shift` | Reduces movement speed and player hitbox height and no movement sound. |
+| **Flash-Step** | `Ctrl` | **Special Movement:** Performs a quick, large step (2x normal step distance) in the current movement direction.<br>• **Cost:** Instantly reduces Stamina by 1.5.<br>• **Restriction 1:** Cannot attack until the step is fully landed.<br>• **Restriction 2:** Cannot be used under **ANY** debuff.<br>• **Note:** This is a quick repositioning tool, not a super-speed dash. Flash step doesnt work is stamina is below 5. |
 
 ---
 
@@ -47,7 +47,7 @@
 | :--- | :---: | :--- |
 | **Ability 1** | `E` | Activates primary ability. |
 | **Ability 2** | `C` | Activates secondary ability. |
-| **Ability 3** | `F` | Activates tertiary ability. *(Updated from Q to avoid conflict with Hotbar Slot 1)* |
+| **Ability 3** | `F` | Activates tertiary ability. |
 
 ---
 
