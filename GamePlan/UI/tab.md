@@ -68,3 +68,6 @@ When `Tab` is held, the UI dynamically updates to prioritize match information:
                         Hotbar (4 | ♦ | 4)    [ Kills        ]
                                               [ Right-Bottom ]
                                                 Armor | Stamina | XP
+
+
+![alt text](image.png)

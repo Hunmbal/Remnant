@@ -86,9 +86,3 @@ How the player interacts with the terrain system in-hand.
 
 ---
 
-## 6. Open Questions / Dev Notes
-- [ ] **Slab Stacking:** If a player places a Horizontal Slab on top of another Horizontal Slab, does it automatically merge into a full Cube? (Standard voxel behavior).
-- [ ] **Ramp Stacking:** If a player places a Ramp on top of another Ramp, does it create a full block, or just a taller ramp?
-- [ ] **Cylinder Collision:** Does the Cylinder use a perfect cylindrical mesh collider, or a simplified box collider for performance?
-- [ ] **Barrier Collision:** Does the Barrier block projectiles (like arrows/bullets) or just player movement?
-- [ ] **Ghost Preview:** The "Ghost Block" (preview before placing) must accurately reflect Category B logic. If the player looks at a wall while holding a Slab, the ghost block must visually snap to the wall vertically in real-time.
