@@ -20,6 +20,9 @@ public class Player : MonoBehaviour
     public float jumpHeight = 1.25f; // Peak vertical displacement (blocks)
     public float gravity = -32f;     // Higher = snappier jump + faster fall
 
+    [Header("Interaction Reach")]
+    public float reach = 3f;         // Block highlight / interaction range (blocks)
+
     [Header("Camera & FOV")]
     public Camera playerCamera;
     public float sensitivityX = 10f;
@@ -44,6 +47,25 @@ public class Player : MonoBehaviour
     bool isAirborne;
     bool thirdPerson;
     float currentMoveSpeed;
+    BlockHighlight highlight;
+
+    // Look control can be disabled while the inventory is open.
+    bool lookEnabled = true;
+
+    // Shared targeting result, computed once per frame in Update after Look().
+    // The highlight, block breaker, and block placer all read this so the overlay,
+    // break reach, and place reach are always the exact same raycast.
+    Block targetBlock;
+    // Closest aimed block (or null)
+    Vector3? placePosition; // Cell to place into when targeting a block's face
+
+    public Block TargetBlock => targetBlock;
+    public Vector3? PlacePosition => placePosition;
+
+    public void EnableLook(bool enabled)
+    {
+        lookEnabled = enabled;
+    }
 
     void Awake()
     {
@@ -92,9 +114,46 @@ public class Player : MonoBehaviour
         if (GetComponent<PlayerVisual>() == null)
             gameObject.AddComponent<PlayerVisual>();
 
+        // Toggleable game state (Default / Practice) with the P key
+        if (GetComponent<PlayerStateToggle>() == null)
+            gameObject.AddComponent<PlayerStateToggle>();
+
+        // Block breaking (hold LMB; instant in Practice)
+        if (GetComponent<BlockBreaker>() == null)
+            gameObject.AddComponent<BlockBreaker>();
+
+        // Block placing / picking (Practice mode: RMB place, MMB pick)
+        if (GetComponent<BlockPlacer>() == null)
+            gameObject.AddComponent<BlockPlacer>();
+
         // Center-screen crosshair
         if (GetComponent<Crosshair>() == null)
             gameObject.AddComponent<Crosshair>();
+
+        // Bottom-center hotbar (4 squircle | diamond | 4 squircle)
+        if (GetComponent<Hotbar>() == null)
+            gameObject.AddComponent<Hotbar>();
+
+        // Health bar above the hotbar (10 squircles + numeric)
+        if (GetComponent<HealthBar>() == null)
+            gameObject.AddComponent<HealthBar>();
+
+        // Right-bottom stats (armor | stamina | xp)
+        if (GetComponent<Stats>() == null)
+            gameObject.AddComponent<Stats>();
+
+        // Block outline highlight (independent root object, not a child).
+        // Destroy any stale highlight so only one clean frame exists.
+        if (highlight == null)
+        {
+            BlockHighlight old = Object.FindObjectOfType<BlockHighlight>();
+            if (old != null) Destroy(old.gameObject);
+            highlight = new GameObject("BlockHighlight").AddComponent<BlockHighlight>();
+        }
+
+        // Inventory (R toggles; creative panel in Practice)
+        if (GetComponent<InventoryUI>() == null)
+            gameObject.AddComponent<InventoryUI>();
 
         // Spawn south of the center platform, standing on the chess floor
         ArenaGenerator arena = Object.FindObjectOfType<ArenaGenerator>();
@@ -110,20 +169,21 @@ public class Player : MonoBehaviour
     }
 
 
-    bool IsSolidAt(Vector3 point)
-    {
-        // Check if there's a solid block at the given world position
-        int bx = Mathf.FloorToInt(point.x);
-        int by = Mathf.FloorToInt(point.y);
-        int bz = Mathf.FloorToInt(point.z);
-        return ArenaGenerator.IsSolid(bx, by, bz);
-    }
-
     void Update()
     {
+        // Practice mode locks stats to maximum and prevents fall damage.
+        if (PlayerStateManager.IsPractice)
+        {
+            health = 10f;
+            stamina = 10f;
+            armor = 10f;
+        }
+
         Look();
+        UpdateTarget();
         Move();
         Jump();
+        GetComponent<PlayerVisual>()?.SetAnimationState(IsSneaking, IsSprinting, CurrentSpeed, controller.isGrounded, verticalVelocity);
         UpdateFOV();
     }
 
@@ -161,10 +221,57 @@ public class Player : MonoBehaviour
             float eyeHeight = IsSneaking ? 1.33f : 1.6f;
             playerCamera.transform.localPosition = new Vector3(0f, eyeHeight, 0f);
         }
+
+        // Block overlay highlight uses the shared per-frame target. The system
+        // relies on block centers sitting exactly on integer grid coords.
+        if (highlight != null)
+        {
+            if (targetBlock != null)
+                highlight.Show(targetBlock.transform.position);
+            else
+                highlight.Hide();
+        }
+    }
+
+    // Single raycast per frame powering the highlight, block breaking, and block
+    // placing. Called after Look() so the camera is already oriented this frame.
+    void UpdateTarget()
+    {
+        targetBlock = null;
+        placePosition = null;
+        if (playerCamera == null) return;
+
+        Vector3 org = playerCamera.transform.position;
+        Vector3 dir = playerCamera.transform.forward;
+
+        RaycastHit[] hits = Physics.RaycastAll(org + dir * 0.01f, dir, reach);
+        float bestDist = float.MaxValue;
+
+        foreach (var hit in hits)
+        {
+            if (hit.collider == null) continue;
+            // Skip the player's own colliders (root CharacterController + body)
+            if (hit.collider.transform == transform ||
+                hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            Block b = hit.collider.GetComponent<Block>();
+            if (b == null) continue;
+
+            if (hit.distance < bestDist)
+            {
+                bestDist = hit.distance;
+                targetBlock = b;
+                // Cell to place a new block into: one step along the face normal.
+                placePosition = b.transform.position + hit.normal;
+            }
+        }
     }
 
     void Look()
     {
+        if (!lookEnabled) return;
+
         float mouseX = Input.GetAxisRaw("Mouse X") * sensitivityX;
         float mouseY = Input.GetAxisRaw("Mouse Y") * sensitivityY;
 

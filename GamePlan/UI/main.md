@@ -15,6 +15,7 @@
 * **Visual:** 10 rounded squares (squircles).
   * **Filled:** Red (Current health).
   * **Empty:** Gray (Missing health).
+  * **Half:** red Right triangle other half gray right triangle (Missing health).
 * **Numeric Display:** Shows exact health value rounded to the nearest 0.5 (e.g., `18.5`).
 
 ### Hotbar
@@ -56,9 +57,9 @@
 ### Resource Counters
 * **Layout:** Vertical or horizontal grouping of core player stats.
 * **Components:**
-  * **Armor:** Defense rating / durability.
-  * **Stamina:** Energy for sprinting/dodging.
-  * **XP:** Experience points / level progress.
+  * **Armor:** Defense rating / durability. (blue sheild icon)
+  * **Stamina:** Energy for sprinting/dodging. (green leaf icon)
+  * **XP:** Experience points / level progress. (yellow Star icon)
 
 ---
 

@@ -93,6 +93,9 @@ public class Crosshair : MonoBehaviour
     {
         if (texture == null) return;
 
+        // Never inherit GUI.color from another script's OnGUI (it is static).
+        GUI.color = Color.white;
+
         Rect rect = new Rect(
             Screen.width / 2f - displaySize / 2f,
             Screen.height / 2f - displaySize / 2f,

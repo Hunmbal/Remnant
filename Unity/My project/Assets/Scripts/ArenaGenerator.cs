@@ -13,6 +13,14 @@ public class ArenaGenerator : MonoBehaviour
     public static bool IsSolid(int x, int y, int z)
         => solidCells.Contains(new Vector3Int(x, y, z));
 
+    // Remove a block from the solid grid (used when a block is broken/placed)
+    public static void SetSolid(int x, int y, int z, bool solid)
+    {
+        var key = new Vector3Int(x, y, z);
+        if (solid) solidCells.Add(key);
+        else solidCells.Remove(key);
+    }
+
     void Start()
     {
         // Enforce 100x100 (older serialized instances may still have size=10)
@@ -84,8 +92,10 @@ public class ArenaGenerator : MonoBehaviour
         {
             for (int z = 0; z < size; z++)
             {
-                Material mat = ((x + z) % 2 == 0) ? greenMat : blackMat;
-                CreateBlock(new Vector3(x, 0, z), mat);
+                bool even = (x + z) % 2 == 0;
+                Material mat = even ? greenMat : blackMat;
+                ClayColor cc = even ? ClayColor.Green : ClayColor.Black;
+                CreateBlock(new Vector3(x, 0, z), mat, BlockMaterial.Clay, cc);
             }
         }
 
@@ -95,7 +105,7 @@ public class ArenaGenerator : MonoBehaviour
         {
             for (int z = 0; z < size; z++)
             {
-                CreateBlock(new Vector3(x, topY, z), barrierMat);
+                CreateBlock(new Vector3(x, topY, z), barrierMat, BlockMaterial.Barrier);
             }
         }
 
@@ -104,13 +114,13 @@ public class ArenaGenerator : MonoBehaviour
         {
             for (int x = 0; x < size; x++)
             {
-                CreateBlock(new Vector3(x, y, 0), barrierMat);
-                CreateBlock(new Vector3(x, y, size - 1), barrierMat);
+                CreateBlock(new Vector3(x, y, 0), barrierMat, BlockMaterial.Barrier);
+                CreateBlock(new Vector3(x, y, size - 1), barrierMat, BlockMaterial.Barrier);
             }
             for (int z = 1; z < size - 1; z++)
             {
-                CreateBlock(new Vector3(0, y, z), barrierMat);
-                CreateBlock(new Vector3(size - 1, y, z), barrierMat);
+                CreateBlock(new Vector3(0, y, z), barrierMat, BlockMaterial.Barrier);
+                CreateBlock(new Vector3(size - 1, y, z), barrierMat, BlockMaterial.Barrier);
             }
         }
 
@@ -138,23 +148,41 @@ public class ArenaGenerator : MonoBehaviour
                 {
                     for (int y = 0; y < tier.h; y++)
                     {
-                        CreateBlock(new Vector3(x, y, z), mat);
+                        CreateBlock(new Vector3(x, y, z), mat, BlockMaterial.Clay, ClayColor.Brown);
                     }
                 }
             }
         }
     }
 
-    GameObject CreateBlock(Vector3 position, Material mat)
+    GameObject CreateBlock(Vector3 position, Material mat, BlockMaterial blockMaterial = BlockMaterial.Clay, ClayColor? clayColorOverride = null)
     {
         var key = new Vector3Int((int)position.x, (int)position.y, (int)position.z);
         if (!solidCells.Add(key))
             return null;
 
         GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        block.name = "ArenaBlock";
         block.transform.position = position;
         block.transform.parent = transform;
         block.GetComponent<Renderer>().material = mat;
+
+        Block b = block.AddComponent<Block>();
+        b.material = blockMaterial;
+        if (clayColorOverride.HasValue)
+            b.clayColor = clayColorOverride.Value;
+
         return block;
+    }
+
+    // Public placement API used by BlockPlacer (practice mode).
+    public void SpawnNewBlock(Vector3 position, SlotBlock slot)
+    {
+        var key = new Vector3Int((int)position.x, (int)position.y, (int)position.z);
+        if (solidCells.Contains(key))
+            return;
+
+        Material mat = CreateClayMaterial(slot.GetColor());
+        CreateBlock(position, mat, slot.BlockMaterial, slot.clayColor);
     }
 }

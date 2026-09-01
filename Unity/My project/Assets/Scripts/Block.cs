@@ -5,13 +5,18 @@ public class Block : MonoBehaviour
     public BlockMaterial material = BlockMaterial.Clay;
     public ClayColor clayColor = ClayColor.Green;
 
-    protected Renderer renderer;
-    protected BoxCollider collider;
+    // Time (seconds) to break this block with bare hands.
+    // Each block type may define its own default here.
+    public float breakTime = 5f;
+    public bool breakable = true;
+
+    protected Renderer blockRenderer;
+    protected BoxCollider boxCollider;
 
     void Awake()
     {
-        renderer = GetComponent<Renderer>();
-        collider = GetComponent<BoxCollider>();
+        blockRenderer = GetComponent<Renderer>();
+        boxCollider = GetComponent<BoxCollider>();
 
         ApplyMaterial();
     }
@@ -21,49 +26,50 @@ public class Block : MonoBehaviour
         switch (material)
         {
             case BlockMaterial.Clay:
-                ApplyClayColor(clayColor);
-                if (collider != null) collider.isTrigger = false;
+                // The generator assigns a correctly colored material. Only
+                // override here when the renderer has no material yet.
+                if (blockRenderer != null && blockRenderer.sharedMaterial == null)
+                    ApplyClayColor(clayColor);
+                if (boxCollider != null) boxCollider.isTrigger = false;
                 break;
 
             case BlockMaterial.Barrier:
                 ApplyBarrierMaterial();
-                if (collider != null) collider.isTrigger = false;
+                if (boxCollider != null) boxCollider.isTrigger = false;
+                breakable = false;
                 break;
         }
     }
 
+    // Break this block: remove it from the arena grid and destroy it.
+    public void BreakBlock()
+    {
+        Vector3Int key = new Vector3Int(
+            Mathf.RoundToInt(transform.position.x),
+            Mathf.RoundToInt(transform.position.y),
+            Mathf.RoundToInt(transform.position.z));
+
+        ArenaGenerator.SetSolid(key.x, key.y, key.z, false);
+
+        Destroy(gameObject);
+    }
+
     void ApplyClayColor(ClayColor color)
     {
-        if (renderer != null)
-        {
-            // Use the material assigned in Inspector, just change its color
-            if (renderer.sharedMaterial != null)
-            {
-                renderer.sharedMaterial.color = BlockRegistry.GetClayColor(color);
-            }
-            else
-            {
-                renderer.material.color = BlockRegistry.GetClayColor(color);
-            }
-        }
+        if (blockRenderer != null)
+            blockRenderer.material.color = BlockRegistry.GetClayColor(color);
     }
 
     void ApplyBarrierMaterial()
     {
-        if (renderer != null)
+        if (blockRenderer != null)
         {
-            // Method 1: Just set alpha to 0 on the existing material
-            // This works if the material has transparency enabled
-            if (renderer.sharedMaterial != null)
-            {
-                renderer.sharedMaterial.color = Color.clear;
-                renderer.sharedMaterial.SetFloat("_Mode", 2);
-                renderer.sharedMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                renderer.sharedMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                renderer.sharedMaterial.SetInt("_ZWrite", 0);
-            }
-            // Method 2: Assign a transparent material from Inspector
-            // Or use: renderer.material = new Material(Shader.Find("Transparent/Cutout")); 
+            Material m = blockRenderer.material;
+            m.color = Color.clear;
+            m.SetFloat("_Mode", 2);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
         }
     }
 }
