@@ -155,6 +155,10 @@ public class Player : MonoBehaviour
         if (GetComponent<InventoryUI>() == null)
             gameObject.AddComponent<InventoryUI>();
 
+        // Chat (system commands; "/" or "T" to open)
+        if (GetComponent<Chat>() == null)
+            gameObject.AddComponent<Chat>();
+
         // Spawn south of the center platform, standing on the chess floor
         ArenaGenerator arena = Object.FindObjectOfType<ArenaGenerator>();
         if (arena != null)
@@ -287,10 +291,13 @@ public class Player : MonoBehaviour
 
     void Move()
     {
-        float forwardInput = Input.GetAxisRaw("Vertical");
-        float strafeInput = Input.GetAxisRaw("Horizontal");
+        // While typing in chat, all game inputs are locked.
+        bool typing = Chat.IsLockingInput;
 
-        IsSneaking = Input.GetKey(KeyCode.LeftShift);
+        float forwardInput = typing ? 0f : Input.GetAxisRaw("Vertical");
+        float strafeInput = typing ? 0f : Input.GetAxisRaw("Horizontal");
+
+        IsSneaking = !typing && Input.GetKey(KeyCode.LeftShift);
 
         // Crouch height
         float targetHeight = IsSneaking ? 1.5f : 1.8f;
@@ -435,6 +442,9 @@ public class Player : MonoBehaviour
 
     void Jump()
     {
+        // While typing in chat, all game inputs are locked.
+        if (Chat.IsLockingInput) return;
+
         // While Space is held, auto-jump every time you land (Minecraft-style)
         if (Input.GetButton("Jump") && controller.isGrounded)
         {

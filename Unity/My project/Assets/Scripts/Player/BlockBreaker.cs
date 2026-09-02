@@ -73,17 +73,34 @@ public class BlockBreaker : MonoBehaviour
             progress = 0f;
         }
 
+        // Builder (practice) mode breaks blocks instantly; the loading bar and
+        // hammer gating don't apply. The cooldown between breaks is kept.
+        bool practice = PlayerStateManager.IsPractice;
+        bool breakable = target.breakable;
+        bool canBreak = practice ? breakable : CanBreak(target);
+
         // The load bar appears as soon as the player is aiming to break while
         // holding LMB (outline only when progress is still 0). It shows even for
-        // blocks the current tool can't break (rendered fully red).
-        bool canBreak = CanBreak(target);
-        showBar = holding && target.breakable;
+        // blocks the current tool can't break (rendered fully red). Hidden in
+        // practice since blocks break instantly.
+        showBar = holding && breakable && !practice;
         barRed = showBar && !canBreak;
 
         // While holding, don't start / resume damaging until the cooldown expires.
         if (!holding || cooldown > 0f) return;
 
         if (!canBreak) return;
+
+        if (practice)
+        {
+            target.BreakBlock();
+            progress = 0f;
+            currentTarget = null;
+            showBar = false;
+            barRed = false;
+            cooldown = breakCooldown;
+            return;
+        }
 
         // breakTime = real seconds to break this single block; the cooldown only
         // adds a pause before the NEXT break while holding the button.

@@ -115,6 +115,8 @@ public class HealthBar : MonoBehaviour
 
     void OnGUI()
     {
+        // Builder (practice) mode hides the health bar entirely.
+        if (PlayerStateManager.IsPractice) return;
         if (fillTex == null || emptyTex == null || halfTex == null) return;
         // Never inherit GUI.color from another script's OnGUI (it is static).
         GUI.color = Color.white;
@@ -271,6 +273,8 @@ public class Stats : MonoBehaviour
 
     void OnGUI()
     {
+        // Builder (practice) mode hides the stats panel entirely.
+        if (PlayerStateManager.IsPractice) return;
         if (shieldTex == null || leafTex == null || starTex == null) return;
         // Never inherit GUI.color from another script's OnGUI (it is static).
         GUI.color = Color.white;

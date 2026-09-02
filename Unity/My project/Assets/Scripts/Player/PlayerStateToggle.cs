@@ -7,6 +7,9 @@ public class PlayerStateToggle : MonoBehaviour
 
     void Update()
     {
+        // While typing in chat, all game inputs are locked.
+        if (Chat.IsLockingInput) return;
+
         if (Input.GetKeyDown(KeyCode.P))
         {
             PlayerStateManager.State = PlayerStateManager.IsPractice

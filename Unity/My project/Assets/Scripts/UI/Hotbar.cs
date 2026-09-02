@@ -73,6 +73,9 @@ public class Hotbar : MonoBehaviour
 
     void Update()
     {
+        // While typing in chat, all game inputs are locked.
+        if (Chat.IsLockingInput) return;
+
         for (int i = 0; i < 9; i++)
         {
             if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))

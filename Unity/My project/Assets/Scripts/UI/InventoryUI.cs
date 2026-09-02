@@ -247,6 +247,9 @@ public class InventoryUI : MonoBehaviour
 
     void Update()
     {
+        // While typing in chat, all game inputs are locked.
+        if (Chat.IsLockingInput) return;
+
         if (Input.GetKeyDown(KeyCode.R))
         {
             isOpen = !isOpen;

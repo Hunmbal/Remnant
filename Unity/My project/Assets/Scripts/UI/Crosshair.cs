@@ -93,6 +93,9 @@ public class Crosshair : MonoBehaviour
     {
         if (texture == null) return;
 
+        // Hide the crosshair while typing in chat (like Minecraft).
+        if (Chat.IsOpen) return;
+
         // Never inherit GUI.color from another script's OnGUI (it is static).
         GUI.color = Color.white;
 

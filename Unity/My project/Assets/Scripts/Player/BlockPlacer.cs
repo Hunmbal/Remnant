@@ -20,8 +20,9 @@ public class BlockPlacer : MonoBehaviour
     {
         if (GetComponent<InventoryUI>() != null && GetComponent<InventoryUI>().IsOpen) return;
 
-        // Middle click: pick the block being looked at into the current slot.
-        if (Input.GetMouseButtonDown(2))
+        // Middle click: pick the block being looked at into the current slot
+        // (only in builder/practice mode).
+        if (Input.GetMouseButtonDown(2) && PlayerStateManager.IsPractice)
         {
             PickBlock();
         }
