@@ -155,7 +155,7 @@ public class ArenaGenerator : MonoBehaviour
         }
     }
 
-    GameObject CreateBlock(Vector3 position, Material mat, BlockMaterial blockMaterial = BlockMaterial.Clay, ClayColor? clayColorOverride = null)
+    GameObject CreateBlock(Vector3 position, Material mat, BlockMaterial blockMaterial = BlockMaterial.Clay, ClayColor? clayColorOverride = null, BlockType blockType = BlockType.Clay)
     {
         var key = new Vector3Int((int)position.x, (int)position.y, (int)position.z);
         if (!solidCells.Add(key))
@@ -169,6 +169,8 @@ public class ArenaGenerator : MonoBehaviour
 
         Block b = block.AddComponent<Block>();
         b.material = blockMaterial;
+        b.blockType = blockType;
+        b.breakTime = BlockDefs.BaseBreakTime(blockType);
         if (clayColorOverride.HasValue)
             b.clayColor = clayColorOverride.Value;
 
@@ -183,6 +185,6 @@ public class ArenaGenerator : MonoBehaviour
             return;
 
         Material mat = CreateClayMaterial(slot.GetColor());
-        CreateBlock(position, mat, slot.BlockMaterial, slot.clayColor);
+        CreateBlock(position, mat, slot.BlockMaterial, slot.clayColor, slot.blockType);
     }
 }

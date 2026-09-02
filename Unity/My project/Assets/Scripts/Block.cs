@@ -4,11 +4,16 @@ public class Block : MonoBehaviour
 {
     public BlockMaterial material = BlockMaterial.Clay;
     public ClayColor clayColor = ClayColor.Green;
+    public BlockType blockType = BlockType.Clay;
 
     // Time (seconds) to break this block with bare hands.
     // Each block type may define its own default here.
     public float breakTime = 5f;
     public bool breakable = true;
+
+    // Break type (1 or 2) from BlockDefs. Type 2 (Iron/Diamond) needs a high
+    // enough hammer; type 1 (Clay/Wood/Stone) can always be broken.
+    public int BreakType => blockType == BlockType.Barrier ? 1 : BlockDefs.BreakType(blockType);
 
     protected Renderer blockRenderer;
     protected BoxCollider boxCollider;

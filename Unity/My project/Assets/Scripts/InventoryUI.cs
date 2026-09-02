@@ -84,30 +84,29 @@ public class InventoryUI : MonoBehaviour
         tex.filterMode = FilterMode.Point;
 
         float cx = size * 0.5f;
-        float cy = size * 0.34375f;
-        float w = size * 0.3125f;
-        float h = size * 0.15625f;
-        float sh = size * 0.3125f;
+        float cy = size * 0.5f;
+        float u = size * 0.22f;
+        float v = size * 0.24f;
 
         Vector2[] top = {
-            new Vector2(cx, cy - h),
-            new Vector2(cx + w, cy),
-            new Vector2(cx, cy + h),
-            new Vector2(cx - w, cy)
-        };
-
-        Vector2[] left = {
-            new Vector2(cx - w, cy),
-            new Vector2(cx, cy + h),
-            new Vector2(cx, cy + h + sh),
-            new Vector2(cx - w, cy + sh)
+            new Vector2(cx, cy - u - v),
+            new Vector2(cx + 2f * u, cy - v),
+            new Vector2(cx, cy + u - v),
+            new Vector2(cx - 2f * u, cy - v)
         };
 
         Vector2[] right = {
-            new Vector2(cx, cy + h),
-            new Vector2(cx + w, cy),
-            new Vector2(cx + w, cy + sh),
-            new Vector2(cx, cy + h + sh)
+            new Vector2(cx + 2f * u, cy + v),
+            new Vector2(cx + 2f * u, cy - v),
+            new Vector2(cx, cy + u - v),
+            new Vector2(cx, cy + u + v)
+        };
+
+        Vector2[] left = {
+            new Vector2(cx - 2f * u, cy + v),
+            new Vector2(cx, cy + u + v),
+            new Vector2(cx, cy + u - v),
+            new Vector2(cx - 2f * u, cy - v)
         };
 
         Color[] px = new Color[size * size];
@@ -120,8 +119,8 @@ public class InventoryUI : MonoBehaviour
 
                 float shade = -1f;
                 if (InQuad(p, top)) shade = 1.0f;
-                else if (InQuad(p, left)) shade = 0.75f;
-                else if (InQuad(p, right)) shade = 0.55f;
+                else if (InQuad(p, right)) shade = 0.78f;
+                else if (InQuad(p, left)) shade = 0.55f;
 
                 Color col;
                 if (shade > 0f)
