@@ -5,6 +5,12 @@ using UnityEngine;
 // Commands:
 //   /gs d, /gamestate default   -> set game state to Default
 //   /gs b, /gamestate builder   -> set game state to Practice (Builder)
+//   /map save <name>            -> save the region between the 2 Builder Blocks
+//   /map load <name>            -> load a saved arena, replacing the world
+//   /map fill hand | /map fill <id> -> fill the region with the hand block or an id
+//   /map copy | /map paste      -> copy region to clipboard, paste it at the
+//                                  lowest Builder Block (WorldEdit style)
+//   /map list | /map new        -> list saved maps / reset to the default arena
 //
 // Open the input with Enter (empty input). Enter submits, Esc closes.
 public class Chat : MonoBehaviour
@@ -253,8 +259,8 @@ public class Chat : MonoBehaviour
             arg = raw.Substring(space + 1).Trim();
         }
         cmd = cmd.ToLowerInvariant();
+        string argRaw = arg;
         arg = arg.ToLowerInvariant();
-
         string result = null;
 
         if (cmd == "/gs" || cmd == "/gamestate" || cmd == "/gsd" || cmd == "/gsb")
@@ -284,6 +290,117 @@ public class Chat : MonoBehaviour
                 result = "Usage: /gs <d|b>  or  /gamestate <default|builder>";
             }
         }
+        else if (cmd == "/team")
+        {
+            if (string.IsNullOrEmpty(arg) || arg == "ffa" || arg == "none")
+            {
+                PlayerData.Team = null;
+                MoveToTeamSpawn();
+                result = "Team cleared — spawning on the FFA slot.";
+            }
+            else if (TryParsePlayerTeam(arg, out PlayerTeam team))
+            {
+                PlayerData.Team = team;
+                MoveToTeamSpawn();
+                result = "Team set to " + team + ".";
+            }
+            else
+            {
+                result = "Usage: /team <ffa|red|blue|green|yellow>";
+            }
+        }
+        else if (cmd == "/map")
+        {
+            // Split the tail ("save foo" / "fill hand" / "list" / ...).
+            string rest = argRaw.Trim();
+            string sub = "";
+            string subArg = "";
+            int sp = rest.IndexOf(' ');
+            if (sp >= 0)
+            {
+                sub = rest.Substring(0, sp).Trim();
+                subArg = rest.Substring(sp + 1).Trim();
+            }
+            else
+            {
+                sub = rest;
+            }
+            string subL = sub.ToLowerInvariant();
+
+            if (subL == "save")
+            {
+                result = subArg.Length == 0 ? "Usage: /map save <name>" : MapSaver.Save(subArg);
+            }
+            else if (subL == "load")
+            {
+                result = subArg.Length == 0 ? "Usage: /map load <name>" : MapSaver.Load(subArg);
+            }
+            else if (subL == "spawn")
+            {
+                // /map spawn <map_name> <ffa|red|blue|green|yellow>
+                int sp2 = subArg.IndexOf(' ');
+                string mapName = sp2 >= 0 ? subArg.Substring(0, sp2).Trim() : subArg;
+                string teamStr = sp2 >= 0 ? subArg.Substring(sp2 + 1).Trim() : "";
+
+                if (subArg.Length == 0 || sp2 < 0)
+                {
+                    result = "Usage: /map spawn <map_name> <ffa|red|blue|green|yellow>";
+                }
+                else if (!TryParseSpawnTeam(teamStr, out SpawnTeam team))
+                {
+                    result = "Unknown team '" + teamStr + "'. Use ffa, red, blue, green, or yellow.";
+                }
+                else
+                {
+                    Vector3 feet = player != null ? player.transform.position : Vector3.zero;
+                    result = MapSaver.SetSpawn(mapName, team, feet);
+                }
+            }
+            else if (subL == "fill")
+            {
+                result = MapSaver.Fill(subArg, player);
+            }
+            else if (subL == "paste")
+            {
+                result = MapSaver.Paste();
+            }
+            else if (subL == "copy")
+            {
+                result = MapSaver.Copy();
+            }
+            else if (subL == "list")
+            {
+                string[] files = MapSaver.List();
+                if (files.Length == 0)
+                {
+                    result = "No saved maps yet.";
+                }
+                else
+                {
+                    string[] names = new string[files.Length];
+                    for (int i = 0; i < files.Length; i++)
+                        names[i] = System.IO.Path.GetFileNameWithoutExtension(files[i]);
+                    result = "Maps: " + string.Join(", ", names);
+                }
+            }
+            else if (subL == "new")
+            {
+                ArenaGenerator arena = Object.FindObjectOfType<ArenaGenerator>();
+                if (arena == null)
+                {
+                    result = "No arena found.";
+                }
+                else
+                {
+                    arena.ResetToDefault();
+                    result = "World reset to the default arena.";
+                }
+            }
+            else
+            {
+                result = "Usage: /map save <name> | /map load <name> | /map spawn <name> <ffa|red|blue|green|yellow> | /map fill <hand|id> | /map copy | /map paste | /map list | /map new";
+            }
+        }
         else
         {
             result = "Unknown command: " + raw;
@@ -294,5 +411,39 @@ public class Chat : MonoBehaviour
         history.Add(new Msg(result, true));
         while (history.Count > _maxHistory)
             history.RemoveAt(0);
+    }
+
+    static bool TryParsePlayerTeam(string s, out PlayerTeam team)
+    {
+        switch (s.Trim().ToLowerInvariant())
+        {
+            case "red": team = PlayerTeam.Red; return true;
+            case "blue": team = PlayerTeam.Blue; return true;
+            case "green": team = PlayerTeam.Green; return true;
+            case "yellow": team = PlayerTeam.Yellow; return true;
+            default: team = PlayerTeam.Red; return false;
+        }
+    }
+
+    // Hop the player to the current map's spawn for their (new) team.
+    void MoveToTeamSpawn()
+    {
+        if (player == null) return;
+        ArenaGenerator arena = Object.FindObjectOfType<ArenaGenerator>();
+        if (arena != null && arena.TryGetSpawn(PlayerData.Team, out Vector3 spawnPos))
+            player.transform.position = spawnPos;
+    }
+
+    static bool TryParseSpawnTeam(string s, out SpawnTeam team)
+    {
+        switch (s.Trim().ToLowerInvariant())
+        {
+            case "ffa": team = SpawnTeam.FFA; return true;
+            case "red": team = SpawnTeam.Red; return true;
+            case "blue": team = SpawnTeam.Blue; return true;
+            case "green": team = SpawnTeam.Green; return true;
+            case "yellow": team = SpawnTeam.Yellow; return true;
+            default: team = SpawnTeam.FFA; return false;
+        }
     }
 }

@@ -87,6 +87,27 @@ public class Hotbar : MonoBehaviour
             selected = (selected + 8) % 9;
         else if (scroll < 0f)
             selected = (selected + 1) % 9;
+
+        // Q: drop one item from the selected slot into the world.
+        if (Input.GetKeyDown(KeyCode.Q))
+            DropOne(selected);
+    }
+
+    // Drop a single unit from the given hotbar slot into the world (Minecraft Q).
+    void DropOne(int index)
+    {
+        SlotBlock slot = slots[index];
+        if (slot == null) return;
+
+        Player player = GetComponent<Player>();
+        Vector3 pos = player != null ? player.DropAnchor() : transform.position;
+
+        // Drop just a single unit as a separate item, NOT the slot's own object.
+        ArenaGenerator.DropItem(pos, slot.Clone(1));
+
+        slot.count--;
+        if (slot.count <= 0)
+            slots[index] = null;
     }
 
     void Rebuild()
@@ -192,7 +213,10 @@ public class Hotbar : MonoBehaviour
             // Show the stored item inside the slot (matches the main grid icons).
             SlotBlock slot = slots[i];
             if (slot != null)
+            {
                 InventoryUI.DrawBlockIcon(rect, slot);
+                InventoryUI.DrawStackCount(rect, slot);
+            }
 
             x += size + gap;
         }

@@ -15,6 +15,9 @@ public class Block : MonoBehaviour
     // enough hammer; type 1 (Clay/Wood/Stone) can always be broken.
     public int BreakType => blockType == BlockType.Barrier ? 1 : BlockDefs.BreakType(blockType);
 
+    // Numeric ID for this placed block (BlockIDs).
+    public int GetId() => BlockIDs.IdOf(blockType, clayColor);
+
     protected Renderer blockRenderer;
     protected BoxCollider boxCollider;
 
@@ -42,6 +45,16 @@ public class Block : MonoBehaviour
                 ApplyBarrierMaterial();
                 if (boxCollider != null) boxCollider.isTrigger = false;
                 breakable = false;
+                break;
+
+            case BlockMaterial.Builder:
+                // The arena generator/load always assigns a striped material; only
+                // fill in when the renderer has none yet. Builder markers are
+                // breakable so a misplaced marker can be removed.
+                if (blockRenderer != null && blockRenderer.sharedMaterial == null)
+                    blockRenderer.material.color = BlockRegistry.GetTypeColor(BlockType.BuilderBlock);
+                if (boxCollider != null) boxCollider.isTrigger = false;
+                breakable = true;
                 break;
         }
     }

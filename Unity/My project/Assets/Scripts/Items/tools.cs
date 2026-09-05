@@ -19,6 +19,7 @@ public struct ToolInfo
     public float breakMultiplier;   // x faster at breaking type-1 blocks
     public int type2Break;          // 0 = cannot, 1 = x1, 2 = x2, 4 = x4, etc.
     public float blockReduction;    // shield: divides incoming damage (xN)
+    public int stackLimit;          // tools/weapons don't stack (1 per slot)
 
     public ToolInfo(ToolType t, int lvl, float dmg, float brkMult, int type2BreakVal = 0, float reduction = 1f)
     {
@@ -28,6 +29,7 @@ public struct ToolInfo
         breakMultiplier = brkMult;
         type2Break = type2BreakVal;
         blockReduction = reduction;
+        stackLimit = 1;
     }
 }
 
@@ -71,6 +73,15 @@ public static class ToolDefs
     public static ToolInfo GetSword(int level) => GetLeveled(Swords, level);
     public static ToolInfo GetHammer(int level) => GetLeveled(Hammers, Mathf.Clamp(level, 1, 5));
     public static ToolInfo GetShield(int level) => GetLeveled(Shields, level);
+
+    // Stack limit for any tool (all tools are 1 = don't stack).
+    public static int StackLimit(ToolType type, int level)
+    {
+        if (type == ToolType.Unarmed) return 1;
+        if (type == ToolType.Sword) return GetSword(level).stackLimit;
+        if (type == ToolType.Hammer) return GetHammer(level).stackLimit;
+        return GetShield(level).stackLimit;
+    }
 
     static ToolInfo GetLeveled(ToolInfo[] arr, int level)
     {

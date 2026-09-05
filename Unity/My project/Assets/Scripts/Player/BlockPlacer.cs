@@ -54,10 +54,14 @@ public class BlockPlacer : MonoBehaviour
         Hotbar hotbar = GetComponent<Hotbar>();
         if (hotbar == null) return;
 
+        BlockType type = target.material == BlockMaterial.Barrier ? BlockType.Barrier
+            : target.material == BlockMaterial.Builder ? BlockType.BuilderBlock
+            : BlockType.Clay;
         SlotBlock slot = new SlotBlock
         {
-            blockType = target.material == BlockMaterial.Barrier ? BlockType.Barrier : BlockType.Clay,
-            clayColor = target.clayColor
+            blockType = type,
+            clayColor = target.clayColor,
+            count = BlockDefs.StackLimit(type)
         };
         hotbar.SelectedSlot = slot;
     }
@@ -73,6 +77,15 @@ public class BlockPlacer : MonoBehaviour
         if (arena == null) arena = Object.FindObjectOfType<ArenaGenerator>();
         if (arena == null) return false;
 
+        // Right-clicking a Builder Block shows the map help instead of placing.
+        Block aimed = player != null ? player.TargetBlock : null;
+        if (aimed != null && aimed.blockType == BlockType.BuilderBlock)
+        {
+            ShowMapHelp();
+            cooldown = placeCooldown; // throttle while the button is held
+            return false;
+        }
+
         // Use the shared per-frame raycast result from Player.
         Vector3? placeResult = player != null ? player.PlacePosition : null;
         if (!placeResult.HasValue) return false;
@@ -83,15 +96,43 @@ public class BlockPlacer : MonoBehaviour
             Mathf.RoundToInt(pos.y),
             Mathf.RoundToInt(pos.z));
 
-        // Don't place where the player is standing.
-        if (key.x == Mathf.RoundToInt(transform.position.x) &&
-            key.y == Mathf.RoundToInt(transform.position.y - 0.5f) &&
-            key.z == Mathf.RoundToInt(transform.position.z))
-            return false;
+        // Don't place inside the player's hitbox (their body above the feet). A
+        // block under their feet is allowed so they can build vertically by
+        // jumping and placing a block to land on.
+        BoxCollider bc = GetComponent<BoxCollider>();
+        if (bc != null)
+        {
+            float feetY = transform.position.y + bc.center.y - bc.size.y * 0.5f;
+            if (pos.y + 0.5f > feetY && // block sits at/above the feet -> overlaps body
+                bc.bounds.Intersects(new Bounds(pos, Vector3.one)))
+                return false;
+        }
 
         if (ArenaGenerator.IsSolid(key.x, key.y, key.z)) return false;
 
         arena.SpawnNewBlock(pos, slot);
+
+        // Sliding window: never more than 2 Builder Blocks. Placing a new one with
+        // 2 already present drops the oldest first — 1,2 -> 2,3 -> 3,4 -> 4,1 ...
+        if (slot.blockType == BlockType.BuilderBlock && arena.CountBuilderBlocks() > 2)
+            arena.PopOldestBuilderBlock();
+
+        // Default mode: placing consumes one block. Empty the slot when the
+        // stack runs out. (Practice/creative blocks are infinite, no decrement.)
+        if (!PlayerStateManager.IsPractice)
+        {
+            slot.count--;
+            if (slot.count <= 0)
+                hotbar.SelectedSlot = null;
+        }
         return true;
+    }
+
+    void ShowMapHelp()
+    {
+        Chat.Log("Builder Block: place 2 to mark the corners of the map region.");
+        Chat.Log("/map save <name>  /map fill <hand|id>  — operate on the region");
+        Chat.Log("/map copy  then  /map paste  — clipboard region, anchored at the lowest Builder Block");
+        Chat.Log("/map load <name>  /map list  /map new");
     }
 }

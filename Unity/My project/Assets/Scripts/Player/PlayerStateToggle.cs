@@ -10,7 +10,8 @@ public class PlayerStateToggle : MonoBehaviour
         // While typing in chat, all game inputs are locked.
         if (Chat.IsLockingInput) return;
 
-        if (Input.GetKeyDown(KeyCode.P))
+        // X toggles game state (P is reserved for builder-mode flight).
+        if (Input.GetKeyDown(KeyCode.X))
         {
             PlayerStateManager.State = PlayerStateManager.IsPractice
                 ? PlayerState.Default

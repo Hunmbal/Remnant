@@ -3,7 +3,8 @@ using UnityEngine;
 public enum BlockMaterial
 {
     Clay,
-    Barrier
+    Barrier,
+    Builder
 }
 
 public enum ClayColor
@@ -51,6 +52,21 @@ public static class BlockRegistry
     public static Color GetClayColor(ClayColor color) => ClayColors[(int)color];
 
     public static Color GetClayColor(int index) => ClayColors[Mathf.Clamp(index, 0, 15)];
+
+    // Standard tint for non-clay block types (used by the creative panel icons,
+    // dropped items, and when loading a saved map).
+    public static Color GetTypeColor(BlockType type)
+    {
+        switch (type)
+        {
+            case BlockType.Wood: return new Color(0.62f, 0.43f, 0.22f);
+            case BlockType.Stone: return new Color(0.55f, 0.55f, 0.55f);
+            case BlockType.Iron: return new Color(0.8f, 0.82f, 0.85f);
+            case BlockType.Diamond: return new Color(0.4f, 0.9f, 0.85f);
+            case BlockType.BuilderBlock: return new Color(0.95f, 0.9f, 0.3f); // marker stripe yellow
+            default: return Color.white;
+        }
+    }
 
     static Color HexToColor(string hex)
     {

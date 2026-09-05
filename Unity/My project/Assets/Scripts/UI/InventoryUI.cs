@@ -32,6 +32,7 @@ public class InventoryUI : MonoBehaviour
     GUIStyle clickButton;
 
     static Texture2D cubeTex;
+    static GUIStyle stackCountStyle;
 
     bool isOpen;
     float animT = 0f;
@@ -41,10 +42,30 @@ public class InventoryUI : MonoBehaviour
     Player player;
     Hotbar hotbar;
 
-    SlotBlock[] mainSlots = new SlotBlock[20];
+    // Slots are a single unified index space 0..28:
+    //   0..8  = hotbar (owned/drawn by Hotbar)
+    //   9..28 = main inventory (owned here)
+    public const int HotbarSlots = 9;
+    public const int InventorySlots = 20;
+    public const int TotalSlots = HotbarSlots + InventorySlots; // 29
+
+    SlotBlock[] mainSlots = new SlotBlock[InventorySlots];
     SlotBlock picked;
 
     public static bool IsOpenStatic = false;
+
+    // Unified 0..28 access. Slots 0..8 map to the hotbar, 9..28 to main inventory.
+    public SlotBlock GetSlot(int index)
+    {
+        if (index < HotbarSlots) return hotbar != null ? hotbar.GetSlot(index) : null;
+        return mainSlots[index - HotbarSlots];
+    }
+
+    public void SetSlot(int index, SlotBlock item)
+    {
+        if (index < HotbarSlots) { if (hotbar != null) hotbar.SetSlot(index, item); return; }
+        mainSlots[index - HotbarSlots] = item;
+    }
 
     // --- Tooltip & Hover System ---
     SlotBlock hoveredItem;
@@ -192,6 +213,30 @@ public class InventoryUI : MonoBehaviour
         GUI.color = Color.white;
     }
 
+    // Draw the stack count in the bottom-right corner of a slot, but only when
+    // the stack has more than one block (like Minecraft).
+    public static void DrawStackCount(Rect rect, SlotBlock item)
+    {
+        if (item == null || item.count <= 1) return;
+
+        if (stackCountStyle == null)
+        {
+            stackCountStyle = new GUIStyle(GUI.skin.label);
+            stackCountStyle.fontSize = 16;
+            stackCountStyle.fontStyle = FontStyle.Bold;
+            stackCountStyle.alignment = TextAnchor.LowerRight;
+            stackCountStyle.padding = new RectOffset(8, 6, 0, 4);
+        }
+
+        Rect labelRect = new Rect(rect.x, rect.y, rect.width, rect.height);
+
+        // Drop-shadow for readability against any block color.
+        stackCountStyle.normal.textColor = Color.black;
+        GUI.Label(new Rect(labelRect.x + 1f, labelRect.y - 1f, labelRect.width, labelRect.height), item.count.ToString(), stackCountStyle);
+        stackCountStyle.normal.textColor = Color.white;
+        GUI.Label(labelRect, item.count.ToString(), stackCountStyle);
+    }
+
     Texture2D BuildSlotShape(float radiusRatio, int texSize, Color outlineCol, Color fillCol, float outAlpha, float fillAlpha)
     {
         int size = Mathf.Max(16, texSize);
@@ -330,11 +375,75 @@ public class InventoryUI : MonoBehaviour
         if (picked != null)
             DrawPickedItem();
 
+        // Drop a dragged item if the mouse is released outside any inventory slot.
+        if (picked != null
+            && Event.current.type == EventType.MouseUp
+            && !IsOverAnySlot(mousePos))
+        {
+            DropPickedIntoWorld();
+        }
+
         // 3. Draw Tooltip if hovered long enough
         if (hoverTimer >= hoverDelay && hoveredItem != null)
         {
             DrawTooltip(mousePos, hoveredItem);
         }
+    }
+
+    // True if the mouse is over any hotbar, main-inventory, or creative slot rect.
+    bool IsOverAnySlot(Vector2 mp)
+    {
+        if (hotbar != null)
+            for (int i = 0; i < 9; i++)
+                if (hotbar.GetSlotRect(i).Contains(mp))
+                    return true;
+
+        float centerX = Screen.width / 2f;
+        float cols = 10f;
+        float totalW = cols * slotSize + (cols - 1f) * gap;
+        float x = centerX - totalW / 2f;
+        float hotbarBottom = Screen.height - hotbarYFromBottom;
+        float hotbarTop = hotbarBottom - slotSize;
+        float bottom = hotbarTop - hotbarSpacing + (1f - animT) * (slotSize + gap) * 1.5f;
+
+        for (int row = 0; row < 2; row++)
+        {
+            float y = bottom - (row + 1) * (slotSize + gap);
+            for (int col = 0; col < 10; col++)
+            {
+                Rect rect = new Rect(x + col * (slotSize + gap), y, slotSize, slotSize);
+                if (rect.Contains(mp))
+                    return true;
+            }
+        }
+
+        if (PlayerStateManager.IsPractice)
+        {
+            int rows = 4, cCols = 9;
+            float panelX = panelPadding + 20f;
+            float panelY = panelPadding + 40f;
+            float gridY = panelY + tabHeight + 15f;
+            for (int r = 0; r < rows; r++)
+                for (int c = 0; c < cCols; c++)
+                {
+                    float slotX = panelX + c * (creativeSlotSize + creativeGap);
+                    float slotY = gridY + r * (creativeSlotSize + creativeGap);
+                    if (new Rect(slotX, slotY, creativeSlotSize, creativeSlotSize).Contains(mp))
+                        return true;
+                }
+        }
+
+        return false;
+    }
+
+    // Throw the dragged item out of the inventory into the world.
+    void DropPickedIntoWorld()
+    {
+        if (picked == null) return;
+
+        Vector3 pos = player != null ? player.DropAnchor() : transform.position;
+        ArenaGenerator.DropItem(pos, picked);
+        picked = null;
     }
 
     SlotBlock GetHoveredItem(Vector2 mousePos)
@@ -450,23 +559,69 @@ public class InventoryUI : MonoBehaviour
         for (int i = 0; i < 9; i++)
         {
             Rect rect = hotbar.GetSlotRect(i);
-            if (rect.Contains(Event.current.mousePosition)
-                && Event.current.type == EventType.MouseDown)
+            if (!rect.Contains(Event.current.mousePosition)
+                || Event.current.type != EventType.MouseDown)
+                continue;
+
+            SlotBlock slotItem = hotbar.GetSlot(i);
+
+            // SHIFT + LMB or SHIFT + RMB on a hotbar slot: move it straight to the
+            // last empty inventory slot.
+            if (Event.current.shift)
             {
-                SlotBlock slotItem = hotbar.GetSlot(i);
-                if (picked == null)
+                QuickPlaceToInventory(i, slotItem);
+                continue;
+            }
+
+            // RMB: split a hotbar stack in half (or pick up a single item whole).
+            if (Event.current.button == 1)
+            {
+                if (slotItem == null || picked != null) continue;
+                if (slotItem.count > 1)
                 {
-                    if (slotItem != null)
+                    int half = slotItem.count / 2;
+                    picked = new SlotBlock
                     {
-                        picked = slotItem;
+                        blockType = slotItem.blockType,
+                        clayColor = slotItem.clayColor,
+                        customColor = slotItem.customColor,
+                        count = half
+                    };
+                    slotItem.count -= half;
+                    if (slotItem.count <= 0)
                         hotbar.SetSlot(i, null);
-                    }
                 }
                 else
+                {
+                    picked = slotItem;
+                    hotbar.SetSlot(i, null);
+                }
+                continue;
+            }
+
+            if (picked == null)
+            {
+                if (slotItem != null)
+                {
+                    picked = slotItem;
+                    hotbar.SetSlot(i, null);
+                }
+            }
+            else if (slotItem != null)
+            {
+                // Holding an item onto a hotbar stack: merge if same ID + room,
+                // otherwise swap whole stacks.
+                if (!TryMergePicked(slotItem))
                 {
                     hotbar.SetSlot(i, picked);
                     picked = slotItem;
                 }
+            }
+            else
+            {
+                // Holding an item onto an empty hotbar slot: place it there.
+                hotbar.SetSlot(i, picked);
+                picked = null;
             }
         }
     }
@@ -479,6 +634,7 @@ public class InventoryUI : MonoBehaviour
         GUI.color = new Color(1f, 1f, 1f, 0.85f);
         GUI.DrawTexture(rect, slotBackTex != null ? slotBackTex : Texture2D.whiteTexture);
         DrawItemIcon(rect, picked);
+        DrawStackCount(rect, picked);
         GUI.color = Color.white;
     }
 
@@ -511,29 +667,221 @@ public class InventoryUI : MonoBehaviour
 
                 SlotBlock item = mainSlots[index];
                 if (item != null)
+                {
                     DrawItemIcon(rect, item);
+                    DrawStackCount(rect, item);
+                }
 
                 if (rect.Contains(Event.current.mousePosition)
                     && Event.current.type == EventType.MouseDown)
                 {
-                    if (picked == null)
-                    {
-                        if (item != null)
-                        {
-                            picked = item;
-                            mainSlots[index] = null;
-                        }
-                    }
-                    else
-                    {
-                        mainSlots[index] = picked;
-                        picked = item;
-                    }
+                    HandleMainSlotClick(index, item, Event.current.button, Event.current.shift);
                 }
             }
         }
 
         GUI.color = Color.white;
+    }
+
+    // Merge the picked item into a target stack that has the SAME block ID and
+    // still has room. Only the amount that fits (up to the stack limit) transfers;
+    // the remainder stays under the cursor. Returns true if any amount moved.
+    bool TryMergePicked(SlotBlock target)
+    {
+        if (picked == null || target == null) return false;
+        if (picked.Id != target.Id) return false;
+        if (target.count >= target.StackLimit) return false;
+
+        int moved = Mathf.Min(target.StackLimit - target.count, picked.count);
+        if (moved <= 0) return false;
+
+        target.count += moved;
+        picked.count -= moved;
+        if (picked.count <= 0) picked = null;
+        return true;
+    }
+
+    // Handles a mouse click on a main-inventory slot.
+    //   button 0 (LMB): pick up the whole stack / item. Dropping a picked item
+    //                   onto a same-ID non-full stack merges it; any overflow stays
+    //                   under the cursor. Different-ID stacks swap instead.
+    //   button 1 (RMB): pick up half of a block stack (whole for single items).
+    //   SHIFT+LMB     : quick-place to hotbar, filling empty slots left-to-right.
+    //   SHIFT+RMB     : quick-place to hotbar, filling empty slots right-to-left.
+    void HandleMainSlotClick(int index, SlotBlock slotItem, int button, bool shift)
+    {
+        if (button == 0 && shift) { QuickPlaceToHotbar(index, slotItem, false); return; }
+        if (button == 1 && shift) { QuickPlaceToHotbar(index, slotItem, true); return; }
+
+        // RMB: split a stack in half (or pick up a single item whole).
+        if (button == 1)
+        {
+            if (slotItem == null || picked != null) return;
+            if (slotItem.count > 1)
+            {
+                int half = slotItem.count / 2;
+                picked = new SlotBlock
+                {
+                    blockType = slotItem.blockType,
+                    clayColor = slotItem.clayColor,
+                    customColor = slotItem.customColor,
+                    count = half
+                };
+                slotItem.count -= half;
+                if (slotItem.count <= 0)
+                    mainSlots[index] = null;
+            }
+            else
+            {
+                picked = slotItem;
+                mainSlots[index] = null;
+            }
+            return;
+        }
+
+        // LMB: (default)
+        if (picked == null)
+        {
+            // Empty cursor: pick up the whole stack.
+            if (slotItem != null)
+            {
+                picked = slotItem;
+                mainSlots[index] = null;
+            }
+        }
+        else if (slotItem != null)
+        {
+            // Holding an item: try to merge into a same-ID non-full stack. If the
+            // merge moves nothing (different ID, or the stack is full), swap the
+            // whole stacks instead. On a partial merge the remainder stays picked.
+            if (!TryMergePicked(slotItem))
+            {
+                mainSlots[index] = picked;
+                picked = slotItem;
+            }
+        }
+        else
+        {
+            // Holding an item, dropping onto an empty slot: place it there.
+            mainSlots[index] = picked;
+            picked = null;
+        }
+    }
+
+    // Quick-place: move an inventory item into the hotbar (like Minecraft's Q /
+    // double-click to hotbar). Stackable blocks merge with an existing same-type
+    // stack; anything that doesn't fit stays in the inventory slot. When no same
+    // stack exists (or for single items), the item goes to the first free hotbar
+    // slot searching left-to-right (fillFromRight=false) or right-to-left (true).
+    void QuickPlaceToHotbar(int index, SlotBlock slotItem, bool fillFromRight)
+    {
+        if (slotItem == null || hotbar == null || picked != null) return;
+
+        // Stackable blocks try to merge with an existing hotbar stack first.
+        if (slotItem.count > 1)
+        {
+            int limit = slotItem.StackLimit;
+            for (int h = 0; h < 9; h++)
+            {
+                SlotBlock hb = hotbar.GetSlot(h);
+                if (hb == null || !SameItem(hb, slotItem)) continue;
+                if (hb.count >= limit) continue;
+
+                int moved = Mathf.Min(limit - hb.count, slotItem.count);
+                hb.count += moved;
+                slotItem.count -= moved;
+
+                if (slotItem.count <= 0)
+                    mainSlots[index] = null;
+                return; // remainder (if any) stays in the inventory slot
+            }
+        }
+
+        // No same-type stack (or it's a single item): use the next free hotbar slot.
+        int free = FindFreeHotbarSlot(fillFromRight);
+        if (free >= 0)
+        {
+            hotbar.SetSlot(free, slotItem);
+            mainSlots[index] = null;
+        }
+    }
+
+    // Move an item straight from a hotbar slot (0..8) into the LAST empty main
+    // inventory slot (inventory 9..28, highest empty index first). Empties the
+    // hotbar slot.
+    void QuickPlaceToInventory(int hotbarIndex, SlotBlock slotItem)
+    {
+        if (slotItem == null || picked != null) return;
+
+        for (int m = mainSlots.Length - 1; m >= 0; m--)
+        {
+            if (mainSlots[m] == null)
+            {
+                mainSlots[m] = slotItem;
+                hotbar.SetSlot(hotbarIndex, null);
+                return;
+            }
+        }
+    }
+
+    int FindFreeHotbarSlot(bool fromRight)
+    {
+        if (fromRight)
+        {
+            for (int h = 8; h >= 0; h--)
+                if (hotbar.GetSlot(h) == null) return h;
+        }
+        else
+        {
+            for (int h = 0; h < 9; h++)
+                if (hotbar.GetSlot(h) == null) return h;
+        }
+        return -1;
+    }
+
+    // Add a dropped/obtained block by its ID. Loop slots 0..28 looking for a slot
+    // whose block ID matches AND whose stack is not yet full; if one is found,
+    // merge the drop into it. Along the way, remember the first empty slot. If no
+    // slot matches (same ID + room), the block goes into that first empty slot.
+    public bool AddItem(SlotBlock item)
+    {
+        if (item == null) return true;
+
+        int id = item.Id;
+        int emptySlot = -1; // first empty slot seen during the scan
+
+        for (int s = 0; s < TotalSlots; s++)
+        {
+            SlotBlock existing = GetSlot(s);
+
+            // Remember the id of the first empty slot (fallback placement target).
+            if (existing == null)
+            {
+                if (emptySlot < 0) emptySlot = s;
+                continue;
+            }
+
+            // Same block id AND the stack still has room -> pick up the drop here.
+            if (existing.Id == id && existing.count < existing.StackLimit)
+            {
+                int limit = existing.StackLimit;
+                int moved = Mathf.Min(limit - existing.count, item.count);
+                existing.count += moved;
+                item.count -= moved;
+                if (item.count <= 0) return true;
+                // A big drop may overflow one stack; keep scanning for more room.
+            }
+        }
+
+        // No matching non-full stack (or it couldn't absorb everything): drop the
+        // remainder into the first empty slot saved during the scan.
+        if (emptySlot >= 0 && item.count > 0)
+        {
+            SetSlot(emptySlot, item);
+            return true;
+        }
+
+        return false; // no match and no room anywhere
     }
 
     void DrawCreativePanel()
@@ -627,22 +975,45 @@ public class InventoryUI : MonoBehaviour
 
     SlotBlock GetCreativeItem(int index)
     {
+        if (creativeTab == "Other")
+        {
+            // index 0: Builder Block marker that defines the /map save region.
+            if (index == 0)
+                return CreativeBlock(BlockType.BuilderBlock, BlockRegistry.GetTypeColor(BlockType.BuilderBlock));
+            return null;
+        }
+
         if (creativeTab != "Blocks") return null;
 
         int blockIndex = index;
         if (blockIndex < 16)
         {
-            return new SlotBlock { blockType = BlockType.Clay, clayColor = (ClayColor)blockIndex };
+            return new SlotBlock
+            {
+                blockType = BlockType.Clay,
+                clayColor = (ClayColor)blockIndex,
+                count = BlockDefs.StackLimit(BlockType.Clay)
+            };
         }
 
         switch (blockIndex - 27)
         {
-            case 0: return new SlotBlock { blockType = BlockType.Wood, customColor = new Color(0.62f, 0.43f, 0.22f) };
-            case 1: return new SlotBlock { blockType = BlockType.Stone, customColor = new Color(0.55f, 0.55f, 0.55f) };
-            case 2: return new SlotBlock { blockType = BlockType.Iron, customColor = new Color(0.8f, 0.82f, 0.85f) };
-            case 3: return new SlotBlock { blockType = BlockType.Diamond, customColor = new Color(0.4f, 0.9f, 0.85f) };
+            case 0: return CreativeBlock(BlockType.Wood, BlockRegistry.GetTypeColor(BlockType.Wood));
+            case 1: return CreativeBlock(BlockType.Stone, BlockRegistry.GetTypeColor(BlockType.Stone));
+            case 2: return CreativeBlock(BlockType.Iron, BlockRegistry.GetTypeColor(BlockType.Iron));
+            case 3: return CreativeBlock(BlockType.Diamond, BlockRegistry.GetTypeColor(BlockType.Diamond));
             default: return null;
         }
+    }
+
+    SlotBlock CreativeBlock(BlockType type, Color color)
+    {
+        return new SlotBlock
+        {
+            blockType = type,
+            customColor = color,
+            count = BlockDefs.StackLimit(type)   // pull a full stack from creative
+        };
     }
 
     bool SameItem(SlotBlock a, SlotBlock b)

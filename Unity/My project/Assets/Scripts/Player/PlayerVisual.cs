@@ -53,24 +53,8 @@ public class PlayerVisual : MonoBehaviour
 
     void LoadCharacter()
     {
-        if (characterPrefab == null)
-            characterPrefab = Resources.Load<GameObject>("Models/main/Simple Stick");
-
-        if (characterPrefab != null)
-        {
-            modelInstance = Instantiate(characterPrefab, transform);
-            modelInstance.transform.localPosition = Vector3.zero;
-            modelInstance.transform.localRotation = Quaternion.identity;
-
-            var colliders = modelInstance.GetComponentsInChildren<Collider>(true);
-            foreach (var c in colliders) Destroy(c);
-
-            SetLayerRecursive(modelInstance, hiddenLayer);
-            NormalizeModel();
-            SetupAnimation();
-            return;
-        }
-
+        // The character is built entirely in code from cylinders (limbs, torso)
+        // and a sphere (head). No imported model is used.
         BuildStickFigure();
     }
 
@@ -173,6 +157,71 @@ public class PlayerVisual : MonoBehaviour
         if (fpsArmR != null) fpsArmR.SetActive(!thirdPerson);
     }
 
+    // Toggle a wireframe box that shows the player's collision hitbox (freelook + H).
+    // Built lazily the first time it is shown; sized from the box collider.
+    Transform hitboxRoot;
+    float hitboxHeight = -1f; // cached so we only rebuild on sneak/normal change
+
+    public void SetHitboxVisible(bool visible)
+    {
+        if (hitboxRoot == null && visible)
+            BuildHitbox();
+
+        if (hitboxRoot != null)
+            hitboxRoot.gameObject.SetActive(visible);
+    }
+
+    // Rebuild the wireframe to match the box collider's current size. The
+    // box is centered at (0, height*0.5, 0) and spans local Y 0..height.
+    public void SetHitboxSize(float height, float radius)
+    {
+        if (hitboxRoot == null) return;
+        if (Mathf.Approximately(height, hitboxHeight)) return;
+
+        hitboxHeight = height;
+        float width = radius * 2f;
+        hitboxRoot.localScale = new Vector3(width, height, width);
+        // Center the box vertically so its bottom sits at local Y 0 (the feet).
+        hitboxRoot.localPosition = new Vector3(0f, height * 0.5f, 0f);
+    }
+
+    void BuildHitbox()
+    {
+        hitboxRoot = new GameObject("Hitbox").transform;
+        hitboxRoot.SetParent(transform, false);
+
+        Material lineMat = MakeMat(new Color(0.2f, 1f, 0.35f, 1f));
+
+        // Corners of a unit cube centered on the origin; scaled later to the box.
+        Vector3[] c =
+        {
+            new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+            new Vector3(0.5f, -0.5f, 0.5f),  new Vector3(-0.5f, -0.5f, 0.5f),
+            new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, -0.5f),
+            new Vector3(0.5f, 0.5f, 0.5f),  new Vector3(-0.5f, 0.5f, 0.5f)
+        };
+        int[] pairs =
+        {
+            0,1, 1,2, 2,3, 3,0, // bottom
+            4,5, 5,6, 6,7, 7,4, // top
+            0,4, 1,5, 2,6, 3,7  // verticals
+        };
+        for (int i = 0; i < pairs.Length; i += 2)
+        {
+            GameObject edge = new GameObject("Edge");
+            edge.transform.SetParent(hitboxRoot, false);
+            LineRenderer lr = edge.AddComponent<LineRenderer>();
+            lr.positionCount = 2;
+            lr.SetPosition(0, c[pairs[i]]);
+            lr.SetPosition(1, c[pairs[i + 1]]);
+            lr.startWidth = 0.04f;
+            lr.endWidth = 0.04f;
+            lr.alignment = LineAlignment.View;
+            lr.sharedMaterial = lineMat;
+            lr.useWorldSpace = false;
+        }
+    }
+
     Material MakeMat(Color c)
     {
         Shader s = Shader.Find("Universal Render Pipeline/Unlit");
@@ -185,9 +234,9 @@ public class PlayerVisual : MonoBehaviour
         return m;
     }
 
-    GameObject AddBodyPart(string name, Vector3 localPos, Vector3 scale, Color color, Transform parent, int layer)
+    GameObject AddBodyPart(string name, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, Transform parent, int layer)
     {
-        GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        GameObject part = GameObject.CreatePrimitive(type);
         part.name = name;
         part.layer = layer;
         part.transform.parent = parent;
@@ -201,36 +250,41 @@ public class PlayerVisual : MonoBehaviour
         return part;
     }
 
+    // The character is a simple robot: cylinder limbs + torso and a sphere head.
+    // Unity's cylinder primitive is height 2, radius 0.5 (axis Y), so scale.y is
+    // half the desired height and scale.x/z are the desired diameter. The sphere
+    // primitive is radius 0.5, so scale is the desired diameter.
     void BuildStickFigure()
     {
-        AddBodyPart("Leg L", new Vector3(-0.11f, 0.4f, 0f), new Vector3(0.18f, 0.8f, 0.18f), limbColor, transform, 0);
-        AddBodyPart("Leg R", new Vector3(0.11f, 0.4f, 0f), new Vector3(0.18f, 0.8f, 0.18f), limbColor, transform, 0);
-        AddBodyPart("Torso", new Vector3(0f, 1.125f, 0f), new Vector3(0.44f, 0.65f, 0.28f), torsoColor, transform, hiddenLayer);
-        AddBodyPart("Arm L", new Vector3(-0.31f, 1.09f, 0f), new Vector3(0.14f, 0.72f, 0.14f), limbColor, transform, hiddenLayer);
-        AddBodyPart("Arm R", new Vector3(0.31f, 1.09f, 0f), new Vector3(0.14f, 0.72f, 0.14f), limbColor, transform, hiddenLayer);
-        AddBodyPart("Head", new Vector3(0f, 1.6f, 0f), new Vector3(0.4f, 0.4f, 0.4f), torsoColor, transform, hiddenLayer);
+        AddBodyPart("Leg L", PrimitiveType.Cylinder, new Vector3(-0.11f, 0.4f, 0f), new Vector3(0.18f, 0.4f, 0.18f), limbColor, transform, hiddenLayer);
+        AddBodyPart("Leg R", PrimitiveType.Cylinder, new Vector3(0.11f, 0.4f, 0f), new Vector3(0.18f, 0.4f, 0.18f), limbColor, transform, hiddenLayer);
+        AddBodyPart("Torso", PrimitiveType.Cylinder, new Vector3(0f, 1.125f, 0f), new Vector3(0.42f, 0.325f, 0.42f), torsoColor, transform, hiddenLayer);
+        AddBodyPart("Arm L", PrimitiveType.Cylinder, new Vector3(-0.22f, 1.09f, 0f), new Vector3(0.13f, 0.36f, 0.13f), limbColor, transform, hiddenLayer);
+        AddBodyPart("Arm R", PrimitiveType.Cylinder, new Vector3(0.22f, 1.09f, 0f), new Vector3(0.13f, 0.36f, 0.13f), limbColor, transform, hiddenLayer);
+        AddBodyPart("Head", PrimitiveType.Sphere, new Vector3(0f, 1.6f, 0f), new Vector3(0.4f, 0.4f, 0.4f), torsoColor, transform, hiddenLayer);
     }
 
     void BuildFirstPersonArms()
     {
         if (playerCamera == null) return;
 
-        GameObject armL = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        // Forearms: cylinders (height 2 primitive -> scale.y is half height).
+        GameObject armL = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         armL.name = "FPS Arm L";
         armL.transform.parent = playerCamera.transform;
-        armL.transform.localPosition = new Vector3(-0.34f, -0.14f, 0.26f);
-        armL.transform.localScale = new Vector3(0.11f, 0.5f, 0.11f);
+        armL.transform.localPosition = new Vector3(-0.22f, -0.14f, 0.26f);
+        armL.transform.localScale = new Vector3(0.11f, 0.25f, 0.11f);
         armL.transform.localRotation = Quaternion.Euler(0f, 0f, 22f);
         armL.GetComponent<Renderer>().material = MakeMat(limbColor);
         Collider c1 = armL.GetComponent<Collider>();
         if (c1 != null) Destroy(c1);
         fpsArmL = armL;
 
-        GameObject armR = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        GameObject armR = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         armR.name = "FPS Arm R";
         armR.transform.parent = playerCamera.transform;
-        armR.transform.localPosition = new Vector3(0.34f, -0.14f, 0.26f);
-        armR.transform.localScale = new Vector3(0.11f, 0.5f, 0.11f);
+        armR.transform.localPosition = new Vector3(0.22f, -0.14f, 0.26f);
+        armR.transform.localScale = new Vector3(0.11f, 0.25f, 0.11f);
         armR.transform.localRotation = Quaternion.Euler(0f, 0f, -22f);
         armR.GetComponent<Renderer>().material = MakeMat(limbColor);
         Collider c2 = armR.GetComponent<Collider>();

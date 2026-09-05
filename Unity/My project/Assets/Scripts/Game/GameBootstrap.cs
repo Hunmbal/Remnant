@@ -21,7 +21,7 @@ public static class GameBootstrap
             new GameObject("ArenaGenerator", typeof(ArenaGenerator));
         }
 
-        // 3. Player (auto-adds CharacterController + Camera)
+        // 3. Player (auto-adds BoxCollider + kinematic Rigidbody + Camera)
         if (Object.FindObjectOfType<Player>() == null)
         {
             new GameObject("Player", typeof(Player));
